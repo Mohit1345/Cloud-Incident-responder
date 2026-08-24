@@ -1,0 +1,53 @@
+{
+  "service": "fraud-check-service",
+  "time_range": {
+    "start": "2026-08-24T16:30:00Z",
+    "end": "2026-08-24T16:45:00Z"
+  },
+  "baseline_rpm": 1000,
+  "current_rpm": 4520,
+  "traffic_multiplier": 4.52,
+  "metrics": [
+    {
+      "name": "RequestCount",
+      "namespace": "AWS/ApplicationELB",
+      "target_group": "fraud-check-tg",
+      "datapoints": [
+        { "timestamp": "2026-08-24T16:30:00Z", "value": 980 },
+        { "timestamp": "2026-08-24T16:35:00Z", "value": 995 },
+        { "timestamp": "2026-08-24T16:38:00Z", "value": 980 },
+        { "timestamp": "2026-08-24T16:40:00Z", "value": 3100 },
+        { "timestamp": "2026-08-24T16:42:00Z", "value": 4200 },
+        { "timestamp": "2026-08-24T16:44:00Z", "value": 4520 }
+      ]
+    },
+    {
+      "name": "HTTPCode_Target_5XX_Count",
+      "namespace": "AWS/ApplicationELB",
+      "target_group": "fraud-check-tg",
+      "datapoints": [
+        { "timestamp": "2026-08-24T16:30:00Z", "value": 2 },
+        { "timestamp": "2026-08-24T16:44:00Z", "value": 18 }
+      ]
+    },
+    {
+      "name": "TargetResponseTime",
+      "namespace": "AWS/ApplicationELB",
+      "target_group": "fraud-check-tg",
+      "unit": "seconds",
+      "datapoints": [
+        { "timestamp": "2026-08-24T16:30:00Z", "value": 0.12 },
+        { "timestamp": "2026-08-24T16:44:00Z", "value": 0.89 }
+      ]
+    }
+  ],
+  "upstream_callers": [
+    {
+      "service": "payment-service",
+      "call_volume_change": "+352%",
+      "retry_rate_change": "+200%"
+    }
+  ],
+  "anomaly_detected_at": "2026-08-24T16:40:00Z",
+  "correlation_note": "Traffic spike correlates with payment-service deployment at 16:38 UTC"
+}

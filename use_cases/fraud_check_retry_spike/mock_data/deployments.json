@@ -1,0 +1,37 @@
+{
+  "lookback_hours": 4,
+  "deployments": [
+    {
+      "id": "dep-20260824-163812",
+      "service": "payment-service",
+      "environment": "production",
+      "deployed_at": "2026-08-24T16:38:12Z",
+      "deployed_by": "ci-bot@company.com",
+      "version": "payment-service-v2.14.3",
+      "previous_version": "payment-service-v2.14.2",
+      "commit": "a3f91bc",
+      "commit_message": "Increase fraud check resilience with retry policy update",
+      "status": "SUCCESS",
+      "change_summary": "Updated fraud check client retry configuration"
+    },
+    {
+      "id": "dep-20260824-120045",
+      "service": "fraud-check-service",
+      "environment": "production",
+      "deployed_at": "2026-08-24T12:00:45Z",
+      "deployed_by": "ci-bot@company.com",
+      "version": "fraud-check-service-v1.8.1",
+      "previous_version": "fraud-check-service-v1.8.0",
+      "commit": "b7c22de",
+      "commit_message": "Add latency percentile dashboards",
+      "status": "SUCCESS",
+      "change_summary": "Observability only — no traffic-impacting changes"
+    }
+  ],
+  "most_likely_culprit": {
+    "deployment_id": "dep-20260824-163812",
+    "service": "payment-service",
+    "confidence": 0.92,
+    "reason": "Deployed 2 minutes before traffic spike; config change affects fraud-check call pattern"
+  }
+}

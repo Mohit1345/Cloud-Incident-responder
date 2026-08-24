@@ -1,0 +1,40 @@
+{
+  "service": "payment-service",
+  "config_changes": [
+    {
+      "key": "fraud_check.retry.max_attempts",
+      "previous_value": 1,
+      "current_value": 3,
+      "changed_at": "2026-08-24T16:38:12Z",
+      "changed_by": "dep-20260824-163812",
+      "source": "application.yaml",
+      "impact_analysis": {
+        "expected_traffic_multiplier": 4.5,
+        "explanation": "Each payment request can now retry up to 3 times (1 initial + 2 retries) vs 1 attempt previously. With ~30% retry trigger rate, effective multiplier ≈ 1 + (0.3 × 2) × 3.5 ≈ 4.5x"
+      }
+    },
+    {
+      "key": "fraud_check.retry.backoff_ms",
+      "previous_value": 100,
+      "current_value": 100,
+      "changed_at": null,
+      "changed_by": null,
+      "source": "application.yaml",
+      "impact_analysis": null
+    },
+    {
+      "key": "fraud_check.timeout_ms",
+      "previous_value": 500,
+      "current_value": 500,
+      "changed_at": null,
+      "changed_by": null,
+      "source": "application.yaml",
+      "impact_analysis": null
+    }
+  ],
+  "previous_stable_config": {
+    "fraud_check.retry.max_attempts": 1,
+    "fraud_check.retry.backoff_ms": 100,
+    "fraud_check.timeout_ms": 500
+  }
+}

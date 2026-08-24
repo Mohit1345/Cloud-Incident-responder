@@ -1,0 +1,37 @@
+id: fraud_check_retry_spike
+name: Fraud Check Retry Traffic Spike
+description: >
+  Retry attempts for fraud-check calls increased from 1 to 3, causing ~4.5x
+  traffic spikes to the fraud-check service.
+
+event_source: cloudwatch_alarm
+trigger:
+  alarm_name: fraud-check-request-rate-high
+  metric_namespace: AWS/ApplicationELB
+  metric_name: RequestCount
+  target_group: fraud-check-tg
+  service: fraud-check-service
+
+severity: high
+category: traffic_spike
+
+agent_tools:
+  - classify_incident
+  - query_observability
+  - check_recent_deployments_and_configs
+  - search_runbooks
+  - assess_remediation_risk
+  - execute_remediation
+
+sandbox:
+  mock_aws: true
+  use_forage_slack: true
+
+slack:
+  channel: "#incidents"
+  notify_on: resolution
+
+expected_root_cause: >
+  payment-service config change increased fraud_check.retry.max_attempts from 1 to 3
+expected_remediation: >
+  Revert payment-service fraud_check.retry.max_attempts to 1

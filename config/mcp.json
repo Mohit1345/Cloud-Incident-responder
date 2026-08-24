@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "forage": {
+      "command": "npx",
+      "args": ["-y", "forage-mcp"]
+    }
+  }
+}

@@ -1,0 +1,2 @@
+[console_scripts]
+incident-responder = incident_responder.cli:main
