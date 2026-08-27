@@ -1,0 +1,65 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER:     flashsale
+      POSTGRES_PASSWORD: flashsale
+      POSTGRES_DB:       flashsale
+    ports:
+      - "5432:5432"
+    command: >
+      postgres
+        -c max_connections=50
+        -c shared_buffers=64MB
+        -c log_min_duration_statement=500
+        -c log_connections=on
+        -c log_disconnections=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flashsale -d flashsale"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL:                 postgresql://flashsale:flashsale@postgres:5432/flashsale
+      REDIS_URL:                    redis://redis:6379/0
+      DB_POOL_MIN_SIZE:             "2"
+      DB_POOL_MAX_SIZE:             "10"
+      DB_ARTIFICIAL_DELAY_SECONDS:  "1.0"
+      CACHE_TTL_SECONDS:            "10"
+      HOT_PRODUCT_ID:               "123"
+      CHECKOUT_TIMEOUT_SECONDS:     "3.0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      uvicorn app.main:app
+        --host 0.0.0.0
+        --port 8000
+        --workers 2
+        --log-level info
+
+volumes:
+  postgres_data:
