@@ -26,6 +26,7 @@ from app.redis_client import (
     get_cache_stats, reset_cache_stats,
 )
 from app.products import get_product, checkout, CheckoutError
+from app.observability import setup_otel, init_otel_providers
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,6 +44,7 @@ _start_time    = time.time()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("=== Flash-Sale Simulator starting ===")
+    init_otel_providers()
     await init_db_pool()
     await init_redis()
     logger.info("=== Ready ===")
@@ -58,15 +60,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+setup_otel(app)
 
-class CheckoutRequest(BaseModel):
-    product_id: int
-    quantity:   int = 1
-
-# Add this import at the top
 import asyncpg
 
-# Add this handler after app = FastAPI(...)
 @app.exception_handler(asyncpg.exceptions.TooManyConnectionsError)
 async def db_pool_exhausted_handler(request, exc):
     logger.error("DB pool exhausted: %s", exc)
@@ -75,7 +72,6 @@ async def db_pool_exhausted_handler(request, exc):
         content={"error": "db_pool_exhausted", "message": "Database connection pool exhausted"},
     )
 
-# Also add a general exception handler to prevent silent 500s
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
     logger.error("Unhandled exception: %s", exc, exc_info=True)
@@ -83,6 +79,13 @@ async def general_exception_handler(request, exc):
         status_code=500,
         content={"error": "internal_error", "message": str(exc)},
     )
+
+
+class CheckoutRequest(BaseModel):
+    product_id: int
+    quantity:   int = 1
+
+
 @app.get("/products/{product_id}", tags=["products"])
 async def read_product(product_id: int = Path(..., ge=1)):
     global _request_count, _error_count

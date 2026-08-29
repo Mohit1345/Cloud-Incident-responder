@@ -22,6 +22,10 @@ services:
       retries: 10
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - observability
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"postgresql","service":"flashsale-db"}]'
 
   redis:
     image: redis:7-alpine
@@ -33,6 +37,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - observability
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"redis","service":"redis-cache"}]'
 
   app:
     build:
@@ -41,6 +49,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-dev}
       DATABASE_URL:                 postgresql://flashsale:flashsale@postgres:5432/flashsale
       REDIS_URL:                    redis://redis:6379/0
       DB_POOL_MIN_SIZE:             "2"
@@ -49,11 +58,27 @@ services:
       CACHE_TTL_SECONDS:            "10"
       HOT_PRODUCT_ID:               "123"
       CHECKOUT_TIMEOUT_SECONDS:     "3.0"
+      OTEL_EXPORTER_OTLP_ENDPOINT:  http://otel-collector:4317
+      OTEL_SERVICE_NAME:            flashsale-app
+      OTEL_LOGS_EXPORTER:           otlp
+      OTEL_TRACES_EXPORTER:         otlp
+      OTEL_METRICS_EXPORTER:        otlp
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - observability
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"python","service":"flashsale-app"}]'
     command: >
       uvicorn app.main:app
         --host 0.0.0.0
@@ -61,5 +86,121 @@ services:
         --workers 2
         --log-level info
 
+  # ========================
+  # Observability Stack
+  # ========================
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.114.0
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ./observability/otel-collector/otel-collector.yml:/etc/otel-collector-config.yml
+    environment:
+      DD_API_KEY: ${DD_API_KEY}
+      DD_SITE: ${DD_SITE:-datadoghq.eu}
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-dev}
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8889:8889"
+    depends_on:
+      tempo:
+        condition: service_started
+      loki:
+        condition: service_started
+    networks:
+      - observability
+
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:7.57.0
+    environment:
+      DD_API_KEY: ${DD_API_KEY}
+      DD_SITE: ${DD_SITE:-datadoghq.com}
+      DD_LOGS_ENABLED: "true"
+      DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"
+      DD_CONTAINER_EXCLUDE_LOGS: "name:datadog-agent"
+      DD_APM_ENABLED: "false"
+      DD_ENV: ${DEPLOYMENT_ENV:-dev}
+      DD_PROCESS_AGENT_ENABLED: "false"
+      DD_SYSTEM_PROBE_ENABLED: "false"
+    volumes:
+      - //var/run/docker.sock:/var/run/docker.sock:ro
+      - //var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./observability/datadog/conf.d:/etc/datadog-agent/conf.d:ro
+    depends_on:
+      - app
+      - redis
+      - postgres
+    networks:
+      - observability
+
+  tempo:
+    image: grafana/tempo:2.7.0
+    user: "0"
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo.yml:ro
+      - tempo_data:/tmp/tempo
+    ports:
+      - "3200:3200"   # Tempo query API
+      - "9095:9095"   # Tempo gRPC
+    networks:
+      - observability
+
+  loki:
+    image: grafana/loki:3.3.0
+    user: "0"
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/tmp/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - observability
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+      - "--web.enable-remote-write-receiver"
+    ports:
+      - "9090:9090"
+    networks:
+      - observability
+
+  grafana:
+    image: grafana/grafana:11.5.0
+    environment:
+      GF_SECURITY_ADMIN_USER:     admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP:     "false"
+      GF_INSTALL_PLUGINS:         grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - ./observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    networks:
+      - observability
+
 volumes:
   postgres_data:
+  tempo_data:
+  loki_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  observability:       # ✅ Explicit shared network for all services
+    driver: bridge

@@ -1,0 +1,5 @@
+init_config:
+
+instances:
+  - host: redis        # ← matches the Compose service name
+    port: 6379
