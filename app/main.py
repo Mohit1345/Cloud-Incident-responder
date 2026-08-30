@@ -14,7 +14,11 @@ Endpoints:
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path as FilePath
+
+from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI, HTTPException, Path, Query
 from pydantic import BaseModel
 
@@ -62,6 +66,9 @@ app = FastAPI(
 
 setup_otel(app)
 
+_FRONTEND_DIR = FilePath(__file__).resolve().parent.parent / "frontend"
+app.mount("/assets", StaticFiles(directory=_FRONTEND_DIR), name="assets")
+
 import asyncpg
 
 @app.exception_handler(asyncpg.exceptions.TooManyConnectionsError)
@@ -70,6 +77,21 @@ async def db_pool_exhausted_handler(request, exc):
     return JSONResponse(
         status_code=503,
         content={"error": "db_pool_exhausted", "message": "Database connection pool exhausted"},
+    )
+
+
+@app.exception_handler(TimeoutError)
+async def timeout_handler(request, exc):
+    logger.error("Database timeout: %s", exc)
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": "database_timeout",
+            "message": (
+                "Product lookup timed out while PostgreSQL was saturated. "
+                "This is the cache stampede failure mode the demo is showing."
+            ),
+        },
     )
 
 @app.exception_handler(Exception)
@@ -90,7 +112,21 @@ class CheckoutRequest(BaseModel):
 async def read_product(product_id: int = Path(..., ge=1)):
     global _request_count, _error_count
     _request_count += 1
-    product = await get_product(product_id)
+    try:
+        product = await get_product(product_id)
+    except TimeoutError as exc:
+        _error_count += 1
+        logger.warning("Product lookup timeout for product=%d: %s", product_id, exc)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "database_timeout",
+                "message": (
+                    "Product lookup timed out while PostgreSQL was saturated. "
+                    "This is the cache stampede failure mode the demo is showing."
+                ),
+            },
+        )
     if product is None:
         _error_count += 1
         raise HTTPException(status_code=404, detail=f"Product {product_id} not found")
@@ -175,3 +211,8 @@ async def metrics():
 @app.get("/health", tags=["observability"])
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/", include_in_schema=False)
+async def index():
+    return FileResponse(_FRONTEND_DIR / "index.html")
