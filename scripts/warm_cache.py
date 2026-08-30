@@ -5,6 +5,7 @@ warm_cache.py — Pre-warm the hot product into Redis for a healthy baseline.
 import asyncio
 import json
 import os
+from decimal import Decimal
 
 import asyncpg
 import redis.asyncio as aioredis
@@ -28,7 +29,9 @@ async def warm():
         print("ERROR: Product not found. Run seed_db.py first.")
         return
 
-    product   = dict(row)
+    product = {}
+    for key, val in dict(row).items():
+        product[key] = float(val) if isinstance(val, Decimal) else val
     cache_key = f"product:{HOT_PRODUCT_ID}"
 
     r = aioredis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
