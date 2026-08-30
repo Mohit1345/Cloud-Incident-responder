@@ -86,7 +86,7 @@ async def checkout(product_id: int, quantity: int = 1) -> dict[str, Any]:
             get_product(product_id),
             timeout=settings.CHECKOUT_TIMEOUT_SECONDS,
         )
-    except asyncio.TimeoutError:
+    except (asyncio.TimeoutError, TimeoutError):
         logger.error(
             "CHECKOUT TIMEOUT  product=%d  timeout=%.1fs",
             product_id,

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Flash Sale Simulator</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="hero card">
+      <div>
+        <p class="eyebrow">Flash Sale Simulator</p>
+        <h1>See the cache stampede, then prove it with telemetry.</h1>
+        <p class="lede">Warm the hot key, expire it, then watch Redis misses, PostgreSQL pressure, and request latency jump in real time.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat">
+          <span>Mode</span>
+          <strong id="status-mode">Healthy</strong>
+        </div>
+        <div class="stat">
+          <span>Cache hit rate</span>
+          <strong id="status-hit-rate">--</strong>
+        </div>
+        <div class="stat">
+          <span>DB pool util</span>
+          <strong id="status-db-util">--</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="card phase-banner" id="phase-banner">
+      <div class="phase-copy">
+        <p class="eyebrow">Live demo state</p>
+        <h2 id="phase-title">Baseline ready</h2>
+        <p id="phase-copy">Warm the cache first, then expire the hot key and start the traffic burst.</p>
+      </div>
+      <div class="phase-pill" id="phase-pill">Healthy</div>
+    </section>
+
+    <section class="grid">
+      <div class="card control-panel">
+        <div class="section-title">
+          <h2>Demo Controls</h2>
+          <span>Same origin requests to the real app, Redis, and PostgreSQL</span>
+        </div>
+
+        <div class="button-row">
+          <button id="btn-reset">Reset stats</button>
+          <button id="btn-warm" class="secondary">Warm cache</button>
+          <button id="btn-expire" class="danger">Expire hot product</button>
+          <button id="btn-stampede" class="primary">Run stampede demo</button>
+        </div>
+
+        <div class="button-row single-row">
+          <button id="btn-guided" class="primary wide">Run guided demo sequence</button>
+        </div>
+
+        <label class="field">
+          <span>Demo duration</span>
+          <input id="duration" type="range" min="5" max="60" value="20" />
+          <strong><span id="duration-value">20</span>s</strong>
+        </label>
+
+        <label class="field">
+          <span>Concurrency</span>
+          <input id="concurrency" type="range" min="5" max="100" value="30" />
+          <strong><span id="concurrency-value">30</span> workers</strong>
+        </label>
+
+        <p class="hint">Tip: press <b>Warm cache</b> for the healthy baseline, then <b>Expire hot product</b> and <b>Run stampede demo</b>.</p>
+      </div>
+
+      <div class="card metrics-panel">
+        <div class="section-title">
+          <h2>Live Metrics</h2>
+          <span>Polled every 2 seconds from `/metrics`</span>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric"><span>Requests</span><strong id="m-requests">--</strong></div>
+          <div class="metric"><span>Errors</span><strong id="m-errors">--</strong></div>
+          <div class="metric"><span>Cache hits</span><strong id="m-hits">--</strong></div>
+          <div class="metric"><span>Cache misses</span><strong id="m-misses">--</strong></div>
+          <div class="metric"><span>Cache hit rate</span><strong id="m-hit-rate">--</strong></div>
+          <div class="metric"><span>DB util</span><strong id="m-db-util">--</strong></div>
+          <div class="metric"><span>Checkout failures</span><strong id="m-checkout-fail">--</strong></div>
+          <div class="metric"><span>Uptime</span><strong id="m-uptime">--</strong></div>
+        </div>
+
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-head"><span>Cache hit rate</span><strong id="spark-hit-rate-label">--</strong></div>
+            <svg viewBox="0 0 100 32" preserveAspectRatio="none"><polyline id="spark-hit-rate" points="" /></svg>
+          </div>
+          <div class="chart-card">
+            <div class="chart-head"><span>DB utilization</span><strong id="spark-db-util-label">--</strong></div>
+            <svg viewBox="0 0 100 32" preserveAspectRatio="none"><polyline id="spark-db-util" points="" /></svg>
+          </div>
+          <div class="chart-card wide-chart">
+            <div class="chart-head"><span>Errors / checkout failures</span><strong id="spark-errors-label">--</strong></div>
+            <svg viewBox="0 0 100 32" preserveAspectRatio="none"><polyline id="spark-errors" points="" /></svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid lower">
+      <div class="card evidence-panel">
+        <div class="section-title">
+          <h2>Evidence Stream</h2>
+          <span>What the judges should watch for</span>
+        </div>
+
+        <ol class="checklist">
+          <li>Healthy baseline: low DB utilization, high cache hit rate, steady responses.</li>
+          <li>Trigger: hot cache entry expires.</li>
+          <li>Stampede: traffic lands on the same key and misses in Redis together.</li>
+          <li>Impact: PostgreSQL connection pressure increases and checkout errors appear.</li>
+          <li>Diagnosis: Datadog confirms the pattern and `incident-responder` corroborates it.</li>
+        </ol>
+
+        <div class="event-log" id="event-log" aria-live="polite"></div>
+      </div>
+
+      <div class="card product-panel">
+        <div class="section-title">
+          <h2>Hot Product</h2>
+          <span>Focused on product:123</span>
+        </div>
+
+        <div class="product-card" id="product-card">
+          <p class="product-name" id="product-name">iPhone 17 Pro</p>
+          <p class="product-desc" id="product-desc">Waiting for the current product state...</p>
+          <div class="product-meta">
+            <div><span>Price</span><strong id="product-price">--</strong></div>
+            <div><span>Sale</span><strong id="product-sale">--</strong></div>
+            <div><span>Stock</span><strong id="product-stock">--</strong></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>
