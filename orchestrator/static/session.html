@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Incident session</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; color: #222; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .st-received, .st-diagnosing { background: #FFF3CD; color: #7a5b00; }
+  .st-awaiting_approval { background: #CCE5FF; color: #004085; }
+  .st-approved, .st-applying { background: #D4EDDA; color: #155724; }
+  .st-resolved { background: #D4EDDA; color: #155724; }
+  .st-rejected, .st-failed { background: #F8D7DA; color: #721c24; }
+  section { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  pre { background: #f6f6f6; padding: 8px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
+  button { padding: 8px 16px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; margin-right: 8px; }
+  .approve { background: #1e7e34; color: white; }
+  .reject { background: #c82333; color: white; }
+  .event { font-size: 13px; color: #555; margin: 4px 0; }
+</style>
+</head>
+<body>
+  <h2>Incident <span id="incident-id"></span> <span id="status" class="badge"></span></h2>
+
+  <section>
+    <h3>Alert</h3>
+    <pre id="alert-payload">loading...</pre>
+  </section>
+
+  <section>
+    <h3>Agent activity</h3>
+    <div id="events">no events yet</div>
+  </section>
+
+  <section id="diagnosis-section" style="display:none">
+    <h3>Diagnosis</h3>
+    <pre id="diagnosis"></pre>
+    <h3>Proposed changes</h3>
+    <h4>Immediate mitigation</h4>
+    <pre id="immediate"></pre>
+    <h4>Root-cause fix</h4>
+    <pre id="rootcause"></pre>
+    <div id="approval-actions">
+      <input id="approver" placeholder="your name" style="padding:6px;margin-right:8px;">
+      <button class="approve" onclick="approve()">Approve &amp; apply</button>
+      <button class="reject" onclick="reject()">Reject</button>
+    </div>
+  </section>
+
+  <section id="result-section" style="display:none">
+    <h3>Result</h3>
+    <pre id="applied-result"></pre>
+  </section>
+
+<script>
+const incidentId = window.location.pathname.split('/')[2];
+document.getElementById('incident-id').textContent = incidentId;
+
+async function refresh() {
+  const res = await fetch(`/sessions/${incidentId}`);
+  if (!res.ok) return;
+  const data = await res.json();
+
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = data.status;
+  statusEl.className = 'badge st-' + data.status;
+
+  document.getElementById('alert-payload').textContent = JSON.stringify(data.alert_payload, null, 2);
+
+  const eventsEl = document.getElementById('events');
+  eventsEl.innerHTML = (data.events || []).map(
+    e => `<div class="event">[${e.ts || ''}] ${e.type}: ${JSON.stringify(e.detail || {})}</div>`
+  ).join('') || 'no events yet';
+
+  if (data.diagnosis) {
+    document.getElementById('diagnosis-section').style.display = 'block';
+    document.getElementById('diagnosis').textContent = JSON.stringify(data.diagnosis, null, 2);
+    const pc = data.proposed_changes || {};
+    document.getElementById('immediate').textContent = JSON.stringify(pc.immediate_mitigation || {}, null, 2);
+    document.getElementById('rootcause').textContent = JSON.stringify(pc.root_cause_fix || {}, null, 2);
+  }
+
+  const actionsEl = document.getElementById('approval-actions');
+  actionsEl.style.display = data.status === 'awaiting_approval' ? 'block' : 'none';
+
+  if (data.applied_result) {
+    document.getElementById('result-section').style.display = 'block';
+    document.getElementById('applied-result').textContent = JSON.stringify(data.applied_result, null, 2);
+  }
+}
+
+async function approve() {
+  const approver = document.getElementById('approver').value || 'unknown';
+  await fetch(`/sessions/${incidentId}/approve`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({approved_by: approver})
+  });
+  refresh();
+}
+
+async function reject() {
+  await fetch(`/sessions/${incidentId}/reject`, {method: 'POST'});
+  refresh();
+}
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

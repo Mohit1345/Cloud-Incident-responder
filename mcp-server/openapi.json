@@ -1,0 +1,410 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Incident Responder MCP Tools",
+    "description": "Information-only diagnostic tools for the Flash-Sale Simulator app, exposed here as REST-style endpoints for documentation/import purposes. The underlying server is an MCP server (mcp.server.fastmcp) running over SSE transport, not a native REST API — this spec is a hand-authored mapping of each @mcp.tool() to a POST /tools/{name} endpoint.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8001",
+      "description": "Local incident-responder MCP server (SSE transport, port 8001)"
+    }
+  ],
+  "tags": [
+    { "name": "app", "description": "Application-level diagnostics" },
+    { "name": "redis", "description": "Redis cache diagnostics" },
+    { "name": "postgres", "description": "PostgreSQL diagnostics" },
+    { "name": "aggregate", "description": "Cross-component health checks" }
+  ],
+  "paths": {
+    "/tools/get_app_metrics": {
+      "post": {
+        "operationId": "get_app_metrics",
+        "summary": "Fetch live application metrics",
+        "description": "Fetches live application metrics from the app's /metrics HTTP endpoint. Returns cache hits/misses, hit rate, DB pool stats, checkout errors, uptime.",
+        "tags": ["app"],
+        "requestBody": {
+          "required": false,
+          "content": { "application/json": { "schema": { "type": "object", "properties": {} } } }
+        },
+        "responses": {
+          "200": {
+            "description": "App metrics, or a connection error payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "description": "Metrics payload proxied from the app's /metrics endpoint",
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": { "type": "string" },
+                        "url": { "type": "string" }
+                      },
+                      "required": ["error", "url"]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/get_app_logs": {
+      "post": {
+        "operationId": "get_app_logs",
+        "summary": "Tail Docker container logs for the app service",
+        "description": "Retrieves recent logs from the application Docker container via `docker logs`.",
+        "tags": ["app"],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "lines": { "type": "integer", "default": 100, "description": "Number of lines to tail" },
+                  "since": { "type": "string", "default": "", "description": "Duration string, e.g. '5m', '1h'" },
+                  "grep": { "type": "string", "default": "", "description": "Filter substring" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Filtered log lines, or an error payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "container": { "type": "string" },
+                        "lines_requested": { "type": "integer" },
+                        "since": { "type": "string" },
+                        "grep": { "type": "string" },
+                        "line_count": { "type": "integer" },
+                        "logs": { "type": "array", "items": { "type": "string" } }
+                      },
+                      "required": ["container", "lines_requested", "since", "grep", "line_count", "logs"]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": { "type": "string" },
+                        "source": { "type": "string" },
+                        "container": { "type": "string" }
+                      },
+                      "required": ["error"]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/get_app_logs_from_file": {
+      "post": {
+        "operationId": "get_app_logs_from_file",
+        "summary": "Read app logs from a local log file",
+        "description": "Reads application logs from a local file (LOG_FILE_PATH env var, or common fallback filenames like app.log).",
+        "tags": ["app"],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "lines": { "type": "integer", "default": 100, "description": "Number of trailing lines to return" },
+                  "grep": { "type": "string", "default": "", "description": "Filter substring" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Filtered log lines, or an error payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "file": { "type": "string" },
+                        "lines_requested": { "type": "integer" },
+                        "grep": { "type": "string" },
+                        "line_count": { "type": "integer" },
+                        "logs": { "type": "array", "items": { "type": "string" } }
+                      },
+                      "required": ["file", "lines_requested", "grep", "line_count", "logs"]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": { "type": "string" },
+                        "searched": { "type": "array", "items": { "type": "string" } },
+                        "file": { "type": "string" }
+                      },
+                      "required": ["error"]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/get_redis_info": {
+      "post": {
+        "operationId": "get_redis_info",
+        "summary": "Query Redis INFO for performance and connection metrics",
+        "description": "Returns ops/sec, connected clients, memory usage, hit/miss counters, and uptime from Redis INFO.",
+        "tags": ["redis"],
+        "requestBody": {
+          "required": false,
+          "content": { "application/json": { "schema": { "type": "object", "properties": {} } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Redis stats, or a connection error payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "redis_version": { "type": "string" },
+                        "uptime_in_seconds": { "type": "integer" },
+                        "connected_clients": { "type": "integer" },
+                        "blocked_clients": { "type": "integer" },
+                        "instantaneous_ops_per_sec": { "type": "integer" },
+                        "total_connections_received": { "type": "integer" },
+                        "total_commands_processed": { "type": "integer" },
+                        "keyspace_hits": { "type": "integer" },
+                        "keyspace_misses": { "type": "integer" },
+                        "used_memory_human": { "type": "string" },
+                        "used_memory_peak_human": { "type": "string" },
+                        "maxmemory_human": { "type": "string" }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": { "type": "string" },
+                        "url": { "type": "string" }
+                      },
+                      "required": ["error", "url"]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/get_db_pool_stats": {
+      "post": {
+        "operationId": "get_db_pool_stats",
+        "summary": "Query PostgreSQL pg_stat_activity and pool stats",
+        "description": "Returns connection counts by state, slow queries (>500ms), and frequent query patterns from pg_stat_activity / pg_stat_statements. Does not return raw log lines.",
+        "tags": ["postgres"],
+        "requestBody": {
+          "required": false,
+          "content": { "application/json": { "schema": { "type": "object", "properties": {} } } }
+        },
+        "responses": {
+          "200": {
+            "description": "PostgreSQL diagnostics, or an error payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "connection_states": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "state": { "type": "string", "nullable": true },
+                              "count": { "type": "integer" }
+                            }
+                          }
+                        },
+                        "slow_queries": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "pid": { "type": "integer" },
+                              "user": { "type": "string" },
+                              "duration_ms": { "type": "number" },
+                              "query": { "type": "string" }
+                            }
+                          }
+                        },
+                        "frequent_query_patterns": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "query": { "type": "string" },
+                              "calls": { "type": "integer" },
+                              "total_exec_time_ms": { "type": "number" },
+                              "mean_exec_time_ms": { "type": "number" }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": { "type": "string" },
+                        "host": { "type": "string" }
+                      },
+                      "required": ["error", "host"]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/inspect_cache_key": {
+      "post": {
+        "operationId": "inspect_cache_key",
+        "summary": "Inspect a single Redis cache key",
+        "description": "Checks existence, TTL, memory size, and a value preview for a given Redis key.",
+        "tags": ["redis"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": { "type": "string", "description": "The Redis key to inspect" }
+                },
+                "required": ["key"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Key inspection result, or a connection error payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "key": { "type": "string" },
+                        "exists": { "type": "boolean" },
+                        "ttl_seconds": { "type": "integer", "nullable": true },
+                        "ttl_display": { "type": "string" },
+                        "memory_bytes": { "type": "integer" },
+                        "value_preview": { "type": "string", "nullable": true }
+                      },
+                      "required": ["key", "exists", "ttl_display", "memory_bytes"]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": { "type": "string" },
+                        "url": { "type": "string" }
+                      },
+                      "required": ["error", "url"]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/health_snapshot": {
+      "post": {
+        "operationId": "health_snapshot",
+        "summary": "Aggregated health snapshot across app, Redis, and PostgreSQL",
+        "description": "Quick triage view across all three components — not a deep diagnosis.",
+        "tags": ["aggregate"],
+        "requestBody": {
+          "required": false,
+          "content": { "application/json": { "schema": { "type": "object", "properties": {} } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Aggregated component snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "timestamp": { "type": "number" },
+                    "components": {
+                      "type": "object",
+                      "properties": {
+                        "app": {
+                          "type": "object",
+                          "properties": {
+                            "health_status": {},
+                            "metrics_available": { "type": "boolean" },
+                            "cache_hit_rate_pct": { "type": "number", "nullable": true },
+                            "db_pool_utilization_pct": { "type": "number", "nullable": true },
+                            "checkout_error_pct": { "type": "number", "nullable": true },
+                            "error": { "type": "string" }
+                          }
+                        },
+                        "redis": {
+                          "type": "object",
+                          "properties": {
+                            "ping": { "type": "string" },
+                            "connected_clients": { "type": "integer" },
+                            "instantaneous_ops_per_sec": { "type": "integer" },
+                            "error": { "type": "string" }
+                          }
+                        },
+                        "postgresql": {
+                          "type": "object",
+                          "properties": {
+                            "ping": { "type": "string" },
+                            "active_connections": { "type": "integer" },
+                            "error": { "type": "string" }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": ["timestamp", "components"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
